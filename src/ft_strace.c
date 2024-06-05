@@ -1,34 +1,55 @@
 #include "../include/ft_strace.h"
 
-void	ft_strace(char *prog, char **args, char **env)
+int	ft_strace(char *prog, char **args, char **env)
 {
 	pid_t	child = fork();
+
+	if (child < 0)
+	{
+		fprintf(stderr, "ft_strace: fork: %s\n", strerror(errno));
+		return (1);
+	}
 
 	if (child == 0)
 	{
 		// Child process
-		kill(getpid(), SIGSTOP); // Stop the child process to allow the parent to seize it
+		raise(SIGSTOP);
 		execve(prog, args, env);
+		fprintf(stderr, "ft_strace: execve: %s\n", strerror(errno));
+		exit(1);
 	}
 	else
 	{
 		// Parent process
 		int	status;
-		waitpid(child, &status, WUNTRACED); // Wait for the child to stop itself
 
 		// Seize the child process
-		ptrace(PTRACE_SEIZE, child, NULL, NULL);
+		if (ptrace(PTRACE_SEIZE, child, NULL, NULL) < 0)
+		{
+			fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
+			return (1);
+		}
 		// Send a signal to interrupt the child
-		ptrace(PTRACE_INTERRUPT, child, NULL, NULL);
-		waitpid(child, &status, 0);
+		if (ptrace(PTRACE_INTERRUPT, child, NULL, NULL) < 0)
+		{
+			fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
+			return (1);
+		}
 
 		// Set the child process to trace system calls
-		ptrace(PTRACE_SETOPTIONS, child, NULL, PTRACE_O_TRACESYSGOOD);
+		if (ptrace(PTRACE_SETOPTIONS, child, NULL, PTRACE_O_TRACESYSGOOD) < 0)
+		{
+			fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
+			return (1);
+		}
 
+		// TODO: Block signals and display the complete name of the syscall
 		while (1)
 		{
-			ptrace(PTRACE_SYSCALL, child, NULL, NULL);
-			waitpid(child, &status, 0);
+			if (ptrace(PTRACE_SYSCALL, child, NULL, NULL) < 0)
+				break;
+			if (waitpid(child, &status, 0) < 0)
+				break;
 
 			if (WIFEXITED(status) || WIFSIGNALED(status))
 				break;
@@ -38,6 +59,7 @@ void	ft_strace(char *prog, char **args, char **env)
 			printf("syscall(%lld)\n", regs.orig_rax);
 		}
 	}
+	return (0);
 }
 
 int	main(int argc, char **argv, char **env)
@@ -53,7 +75,7 @@ int	main(int argc, char **argv, char **env)
 		fprintf(stderr, "ft_strace: %s: command not found\n", argv[1]);
 		return (1);
 	}
-	ft_strace(path_exec, &argv[1], env);
+	int ret = ft_strace(path_exec, &argv[1], env);
 	free(path_exec);
-	return (0);
+	return (ret);
 }
