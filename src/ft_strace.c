@@ -1,20 +1,29 @@
 #include "../include/ft_strace.h"
 
-void	ft_strace(char *prog, char **args)
+void	ft_strace(char *prog, char **args, char **env)
 {
 	pid_t	child = fork();
 
 	if (child == 0)
 	{
-		ptrace(PTRACE_TRACEME, 0, NULL, NULL); // TODO: replace forbidden PTRACE_TRACE
-		kill(getpid(), SIGSTOP);
-		execv(prog, args);
+		// Child process
+		kill(getpid(), SIGSTOP); // Stop the child process to allow the parent to seize it
+		execve(prog, args, env);
 	}
 	else
 	{
+		// Parent process
 		int	status;
+		waitpid(child, &status, WUNTRACED); // Wait for the child to stop itself
+
+		// Seize the child process
+		ptrace(PTRACE_SEIZE, child, NULL, NULL);
+		// Send a signal to interrupt the child
+		ptrace(PTRACE_INTERRUPT, child, NULL, NULL);
 		waitpid(child, &status, 0);
-		ptrace(PTRACE_SETOPTIONS, child, 0, PTRACE_O_TRACESYSGOOD);
+
+		// Set the child process to trace system calls
+		ptrace(PTRACE_SETOPTIONS, child, NULL, PTRACE_O_TRACESYSGOOD);
 
 		while (1)
 		{
@@ -31,13 +40,20 @@ void	ft_strace(char *prog, char **args)
 	}
 }
 
-int	main(int argc, char **argv)
+int	main(int argc, char **argv, char **env)
 {
 	if (argc < 2)
 	{
-		printf("ft_strace: must have PROG [ARGS]\n");
+		fprintf(stderr, "ft_strace: must have PROG [ARGS]\n");
 		return (1);
 	}
-	ft_strace(argv[1], argv + 1);
+	char *path_exec = find_exec(argv[1]);
+	if (path_exec == NULL)
+	{
+		fprintf(stderr, "ft_strace: %s: command not found\n", argv[1]);
+		return (1);
+	}
+	ft_strace(path_exec, &argv[1], env);
+	free(path_exec);
 	return (0);
 }

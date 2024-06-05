@@ -11,5 +11,11 @@
 #include <elf.h>
 #include <signal.h>
 #include <syscall.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <string.h>
+
+// utils.c
+char	*find_exec(char *prog);
 
 #endif

@@ -1,4 +1,4 @@
-FILES:= ft_strace
+FILES:= ft_strace utils
 NAME:= ft_strace
 
 # ------------------
