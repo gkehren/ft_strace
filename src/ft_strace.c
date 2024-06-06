@@ -72,36 +72,33 @@ void	print_syscall(t_strace *strace, struct user_regs_struct *regs)
 			case 5: arg = regs->r9; break;
 			default: arg = 0; break;
 		}
-		switch (entry->args[i])
+
+		if (entry->args[i] == INT || entry->args[i] == LONG || entry->args[i] == ULONG)
+			fprintf(stderr, "%lld", arg);
+		else if (entry->args[i] == STR)
 		{
-			case INT:
-				fprintf(stderr, "%lld", arg);
-				break;
-			case LONG:
-				fprintf(stderr, "%lld", arg);
-				break;
-			case ULONG:
-				fprintf(stderr, "%lld", arg);
-				break;
-			case STR:
-				char	buffer[BUFFER_SIZE];
-				long	addr = arg;
-				size_t	len = ptrace(PTRACE_PEEKDATA, strace->child, addr, NULL);
-				len = (len > sizeof(buffer) - 1) ? sizeof(buffer) - 1 : len;
-				for (size_t j = 0; j < len; j += sizeof(long))
-				{
-					*((long *)(buffer + j)) = ptrace(PTRACE_PEEKDATA, strace->child, addr + j, NULL);
-				}
-				buffer[len] = '\0';
-				fprintf(stderr, "\"%s\"", buffer);
-				break;
-			case PTR:
-				fprintf(stderr, "%p", (void *)arg);
-				break;
-			default:
-				fprintf(stderr, "unknown");
-				break;
+			char	buffer[BUFFER_SIZE];
+			long	addr = arg;
+			size_t	len = ptrace(PTRACE_PEEKDATA, strace->child, addr, NULL);
+			len = (len > sizeof(buffer) - 1) ? sizeof(buffer) - 1 : len;
+			for (size_t j = 0; j < len; j += sizeof(long))
+			{
+				*((long *)(buffer + j)) = ptrace(PTRACE_PEEKDATA, strace->child, addr + j, NULL);
+			}
+			buffer[len] = '\0';
+			fprintf(stderr, "\"%s\"", buffer);
 		}
+		else if (entry->args[i] == PTR)
+		{
+			if (arg == 0)
+				fprintf(stderr, "NULL");
+			else
+				fprintf(stderr, "%#llx", arg);
+		}
+		else
+			fprintf(stderr, "%#llx", arg);
+		if (i < entry->arg_count - 1)
+			fprintf(stderr, ", ");
 	}
 	fprintf(stderr, ")");
 }
