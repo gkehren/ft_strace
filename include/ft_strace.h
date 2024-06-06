@@ -1,6 +1,7 @@
 #ifndef FT_STRACE_H
 #define FT_STRACE_H
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
@@ -15,6 +16,7 @@
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 
 // utils.c
 char	*find_exec(char *prog);
