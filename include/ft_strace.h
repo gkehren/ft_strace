@@ -17,6 +17,20 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
+
+#include "x64_syscall_entry.h"
+
+#define BUFFER_SIZE	1024
+
+typedef struct	s_strace
+{
+	pid_t				child;
+	bool				ignore_syscalls;
+	bool				should_print;
+	bool				should_print_ret;
+	unsigned long long	syscall_count;
+} t_strace;
 
 // utils.c
 char	*find_exec(char *prog);

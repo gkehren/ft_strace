@@ -1,16 +1,21 @@
 #include "../include/ft_strace.h"
 
-void	block_signals(void)
+struct syscall_entry syscall_table[] = SYSCALL_TABLE;
+
+void	block_signals(pid_t child)
 {
 	sigset_t	set;
+	int			status;
 
 	sigemptyset(&set);
+	sigprocmask(SIG_SETMASK, &set, NULL);
+	waitpid(child, &status, 0);
 	sigaddset(&set, SIGINT);
 	sigaddset(&set, SIGQUIT);
 	sigaddset(&set, SIGTERM);
-	sigaddset(&set, SIGTERM);
+	sigaddset(&set, SIGPIPE);
 	sigaddset(&set, SIGHUP);
-	sigprocmask(SIG_SETMASK, &set, NULL);
+	sigprocmask(SIG_BLOCK, &set, NULL);
 }
 
 pid_t	create_child_process(char *prog, char **args, char **env)
@@ -35,8 +40,6 @@ pid_t	create_child_process(char *prog, char **args, char **env)
 
 int	init_trace_child(pid_t child)
 {
-	int	status;
-
 	if (ptrace(PTRACE_SEIZE, child, NULL, NULL) < 0)
 	{
 		fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
@@ -47,55 +50,128 @@ int	init_trace_child(pid_t child)
 		fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
 		return (1);
 	}
-	//if (ptrace(PTRACE_SETOPTIONS, child, NULL, PTRACE_O_TRACESYSGOOD) < 0)
-	//{
-	//	fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
-	//	return (1);
-	//}
-	block_signals();
-	waitpid(child, &status, 0);
+	block_signals(child);
 	return (0);
 }
 
+void	print_syscall(t_strace *strace, struct user_regs_struct *regs)
+{
+	struct syscall_entry	*entry = &syscall_table[regs->orig_rax];
+	fprintf(stderr, "%s(", entry->name);
+
+	for (int i = 0; i < entry->arg_count; i++)
+	{
+		unsigned long long arg;
+		switch (i)
+		{
+			case 0: arg = regs->rdi; break;
+			case 1: arg = regs->rsi; break;
+			case 2: arg = regs->rdx; break;
+			case 3: arg = regs->r10; break;
+			case 4: arg = regs->r8; break;
+			case 5: arg = regs->r9; break;
+			default: arg = 0; break;
+		}
+		switch (entry->args[i])
+		{
+			case INT:
+				fprintf(stderr, "%lld", arg);
+				break;
+			case LONG:
+				fprintf(stderr, "%lld", arg);
+				break;
+			case ULONG:
+				fprintf(stderr, "%lld", arg);
+				break;
+			case STR:
+				char	buffer[BUFFER_SIZE];
+				long	addr = arg;
+				size_t	len = ptrace(PTRACE_PEEKDATA, strace->child, addr, NULL);
+				len = (len > sizeof(buffer) - 1) ? sizeof(buffer) - 1 : len;
+				for (size_t j = 0; j < len; j += sizeof(long))
+				{
+					*((long *)(buffer + j)) = ptrace(PTRACE_PEEKDATA, strace->child, addr + j, NULL);
+				}
+				buffer[len] = '\0';
+				fprintf(stderr, "\"%s\"", buffer);
+				break;
+			case PTR:
+				fprintf(stderr, "%p", (void *)arg);
+				break;
+			default:
+				fprintf(stderr, "unknown");
+				break;
+		}
+	}
+	fprintf(stderr, ")");
+}
+
+void	handle_x64_syscall(t_strace *strace, struct user_regs_struct *regs)
+{
+	if (!strace->ignore_syscalls || !strcmp(syscall_table[regs->orig_rax].name, "execve"))
+	{
+		if (strace->should_print && !strace->should_print_ret && regs->rax == (unsigned long long)-ENOSYS && regs->orig_rax < strace->syscall_count)
+		{
+			strace->should_print_ret = true;
+			print_syscall(strace, regs);
+		}
+		else
+		{
+			if (strace->should_print && strace->should_print_ret)
+			{
+				strace->should_print_ret = false;
+				strace->ignore_syscalls = false;
+				if (syscall_table[regs->orig_rax].return_type == INT)
+					fprintf(stderr, " = %lld\n", regs->rax);
+				else
+					fprintf(stderr, " = %#llx\n", regs->rax);
+			}
+			else if (strace->ignore_syscalls && (int)regs->rax < 0)
+				strace->should_print = false;
+		}
+	}
+}
+
 // TODO: for now handle 64-bit syscall later add support for 32-bit syscall
-int	handle_syscall(pid_t child)
+int	handle_syscall(t_strace *strace)
 {
 	struct user_regs_struct	regs;
 	struct iovec			io;
 
 	io.iov_base = &regs;
 	io.iov_len = sizeof(regs);
-	if (ptrace(PTRACE_GETREGSET, child, NT_PRSTATUS, &io) < 0)
-	{
-		fprintf(stderr, "ft_strace: ptrace: %s\n", strerror(errno));
+	if (ptrace(PTRACE_GETREGSET, strace->child, NT_PRSTATUS, &io) < 0)
 		return (1);
-	}
-	fprintf(stderr, "syscall(%lld) = %lld\n", regs.orig_rax, regs.rax);
+	handle_x64_syscall(strace, &regs);
 	return (0);
 }
 
 int	ft_strace(char *prog, char **args, char **env)
 {
-	pid_t		child;
+	t_strace	strace;
 	int			status;
-	int			sig;
+	int			sig = 0;
 	siginfo_t	info;
 
-	child = create_child_process(prog, args, env);
-	if (child < 0)
+	strace.ignore_syscalls = true;
+	strace.should_print = true;
+	strace.should_print_ret = false;
+	strace.syscall_count = sizeof(syscall_table) / sizeof(syscall_table[0]);
+	strace.child = create_child_process(prog, args, env);
+	if (strace.child < 0)
 		return (1);
 
-	if (init_trace_child(child) != 0)
+	if (init_trace_child(strace.child) != 0)
 		return (1);
 
 	while (1)
 	{
-		if (ptrace(PTRACE_SYSCALL, child, NULL, sig) < 0)
+		if (ptrace(PTRACE_SYSCALL, strace.child, NULL, sig) < 0)
 			break;
-		if (waitpid(child, &status, 0) < 0)
+		if (waitpid(strace.child, &status, 0) < 0)
 			break;
 
-		if (!ptrace(PTRACE_GETSIGINFO, child, NULL, &info) && info.si_signo != SIGTRAP)
+		if (!strace.ignore_syscalls && !ptrace(PTRACE_GETSIGINFO, strace.child, NULL, &info) && info.si_signo != SIGTRAP)
 		{
 			// Signal received
 			sig = info.si_signo;
@@ -104,17 +180,17 @@ int	ft_strace(char *prog, char **args, char **env)
 		else
 			sig = 0;
 
-		if (handle_syscall(child) != 0)
+		if (handle_syscall(&strace) != 0)
 			break;
 	}
 
 	if (WIFSIGNALED(status))
 	{
-		fprintf(stderr, "ft_strace: %s: %s\n", prog, strsignal(WTERMSIG(status)));
+		fprintf(stderr, "+++ killed by %s +++\n", strsignal(WTERMSIG(status)));
 		kill(getpid(), WTERMSIG(status));
 	}
 	else
-		fprintf(stderr, "ft_strace: %s: exited with status %d\n", prog, WEXITSTATUS(status));
+		fprintf(stderr, "+++ exited with %d +++\n", WEXITSTATUS(status));
 	return (WEXITSTATUS(status));
 }
 
