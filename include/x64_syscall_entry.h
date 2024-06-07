@@ -38,7 +38,7 @@ struct syscall_entry {
 	{"poll", 3, {STRUCT, ULONG, INT, 0, 0, 0}, INT}, \
 	{"lseek", 3, {INT, PTR, INT, 0, 0, 0}, PTR}, \
 	{"mmap", 6, {PTR, ULONG, FLAG_PROT, FLAG_MMAP, INT, PTR}, PTR}, \
-	{"mprotect", 3, {PTR, ULONG, INT, 0, 0, 0}, INT}, \
+	{"mprotect", 3, {PTR, ULONG, FLAG_PROT, 0, 0, 0}, INT}, \
 	{"munmap", 2, {PTR, ULONG, 0, 0, 0, 0}, INT}, \
 	{"brk", 1, {PTR, 0, 0, 0, 0, 0}, PTR}, \
 	{"rt_sigaction", 4, {SIGNAL, STRUCT, STRUCT, 0, 0, 0}, INT}, \

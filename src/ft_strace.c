@@ -1,6 +1,6 @@
 #include "../include/ft_strace.h"
 
-struct syscall_entry syscall_table[] = SYSCALL_TABLE;
+const struct syscall_entry syscall_table[] = SYSCALL_TABLE;
 
 void	block_signals(pid_t child)
 {
@@ -54,55 +54,6 @@ int	init_trace_child(pid_t child)
 	return (0);
 }
 
-void	print_syscall(t_strace *strace, struct user_regs_struct *regs)
-{
-	struct syscall_entry	*entry = &syscall_table[regs->orig_rax];
-	fprintf(stderr, "%s(", entry->name);
-
-	for (int i = 0; i < entry->arg_count; i++)
-	{
-		unsigned long long arg;
-		switch (i)
-		{
-			case 0: arg = regs->rdi; break;
-			case 1: arg = regs->rsi; break;
-			case 2: arg = regs->rdx; break;
-			case 3: arg = regs->r10; break;
-			case 4: arg = regs->r8; break;
-			case 5: arg = regs->r9; break;
-			default: arg = 0; break;
-		}
-
-		if (entry->args[i] == INT || entry->args[i] == LONG || entry->args[i] == ULONG)
-			fprintf(stderr, "%lld", arg);
-		else if (entry->args[i] == STR)
-		{
-			char	buffer[BUFFER_SIZE];
-			long	addr = arg;
-			size_t	len = ptrace(PTRACE_PEEKDATA, strace->child, addr, NULL);
-			len = (len > sizeof(buffer) - 1) ? sizeof(buffer) - 1 : len;
-			for (size_t j = 0; j < len; j += sizeof(long))
-			{
-				*((long *)(buffer + j)) = ptrace(PTRACE_PEEKDATA, strace->child, addr + j, NULL);
-			}
-			buffer[len] = '\0';
-			fprintf(stderr, "\"%s\"", buffer);
-		}
-		else if (entry->args[i] == PTR)
-		{
-			if (arg == 0)
-				fprintf(stderr, "NULL");
-			else
-				fprintf(stderr, "%#llx", arg);
-		}
-		else
-			fprintf(stderr, "%#llx", arg);
-		if (i < entry->arg_count - 1)
-			fprintf(stderr, ", ");
-	}
-	fprintf(stderr, ")");
-}
-
 void	handle_x64_syscall(t_strace *strace, struct user_regs_struct *regs)
 {
 	if (!strace->ignore_syscalls || !strcmp(syscall_table[regs->orig_rax].name, "execve"))
@@ -110,7 +61,7 @@ void	handle_x64_syscall(t_strace *strace, struct user_regs_struct *regs)
 		if (strace->should_print && !strace->should_print_ret && regs->rax == (unsigned long long)-ENOSYS && regs->orig_rax < strace->syscall_count)
 		{
 			strace->should_print_ret = true;
-			print_syscall(strace, regs);
+			print_syscall(strace, &syscall_table[regs->orig_rax], regs);
 		}
 		else
 		{
@@ -180,6 +131,9 @@ int	ft_strace(char *prog, char **args, char **env)
 		if (handle_syscall(&strace) != 0)
 			break;
 	}
+
+	if (!strace.ignore_syscalls && strace.should_print && strace.should_print_ret)
+		fprintf(stderr, " = ?\n");
 
 	if (WIFSIGNALED(status))
 	{
