@@ -121,9 +121,9 @@ int	ft_strace(char *prog, char **args, char **env)
 
 		if (!strace.ignore_syscalls && !ptrace(PTRACE_GETSIGINFO, strace.child, NULL, &info) && info.si_signo != SIGTRAP)
 		{
-			// Signal received
 			sig = info.si_signo;
-			fprintf(stderr, "signal received: %s: %s\n", prog, strsignal(sig));
+			fprintf(stderr, "--- %s {si_signo=%s, si_code=%d, si_pid=%d, si_uid=%d} ---\n",
+				strsignal(info.si_signo), strsignal(info.si_signo), info.si_code, info.si_pid, info.si_uid);
 		}
 		else
 			sig = 0;
