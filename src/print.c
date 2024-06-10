@@ -76,12 +76,41 @@ void	print_argv(pid_t child, unsigned long long arg)
 	fprintf(stderr, "]");
 }
 
-int	count_envp(unsigned long long arg)
+int count_envp(pid_t child, unsigned long long addr, bool is_x64)
 {
-	int count = 0;
-	unsigned long long *envp = (unsigned long long *)arg;
-	for (int j = 0; envp[j]; j++)
+	int					count = 0;
+	unsigned long long	ptr64;
+	unsigned int		ptr32;
+	char				mem_path[64];
+	snprintf(mem_path, sizeof(mem_path), "/proc/%d/mem", child);
+
+	int mem_fd = open(mem_path, O_RDONLY);
+	if (mem_fd < 0)
+	{
+		fprintf(stderr, "ft_strace: open: %s\n", strerror(errno));
+		return 0;
+	}
+
+	while (1)
+	{
+		if (is_x64)
+		{
+			if (pread(mem_fd, &ptr64, sizeof(ptr64), addr + count * sizeof(ptr64)) != sizeof(ptr64))
+				break;
+			if (ptr64 == 0)
+				break;
+		}
+		else
+		{
+			if (pread(mem_fd, &ptr32, sizeof(ptr32), addr + count * sizeof(ptr32)) != sizeof(ptr32))
+				break;
+			if (ptr32 == 0)
+				break;
+		}
 		count++;
+	}
+
+	close(mem_fd);
 	return count;
 }
 
@@ -176,22 +205,38 @@ void	print_flags_prot(unsigned long long arg)
 		fprintf(stderr, "0");
 }
 
-void	print_syscall(t_strace *strace, const struct syscall_entry *entry, struct user_regs_struct *regs)
+void	print_syscall(t_strace *strace, const struct syscall_entry *entry, regs_union *regs, bool is_x64)
 {
 	fprintf(stderr, "%s(", entry->name);
 
 	for (int i = 0; i < entry->arg_count; i++)
 	{
 		unsigned long long arg;
-		switch (i)
+		if (is_x64)
 		{
-			case 0: arg = regs->rdi; break;
-			case 1: arg = regs->rsi; break;
-			case 2: arg = regs->rdx; break;
-			case 3: arg = regs->r10; break;
-			case 4: arg = regs->r8; break;
-			case 5: arg = regs->r9; break;
-			default: arg = 0; break;
+			switch (i)
+			{
+				case 0: arg = regs->regs64.rdi; break;
+				case 1: arg = regs->regs64.rsi; break;
+				case 2: arg = regs->regs64.rdx; break;
+				case 3: arg = regs->regs64.r10; break;
+				case 4: arg = regs->regs64.r8; break;
+				case 5: arg = regs->regs64.r9; break;
+				default: arg = 0; break;
+			}
+		}
+		else
+		{
+			switch (i)
+			{
+				case 0: arg = regs->regs32.ebx; break;
+				case 1: arg = regs->regs32.ecx; break;
+				case 2: arg = regs->regs32.edx; break;
+				case 3: arg = regs->regs32.esi; break;
+				case 4: arg = regs->regs32.edi; break;
+				case 5: arg = regs->regs32.ebp; break;
+				default: arg = 0; break;
+			}
 		}
 
 		if (entry->args[i] == INT || entry->args[i] == LONG || entry->args[i] == ULONG)
@@ -208,7 +253,7 @@ void	print_syscall(t_strace *strace, const struct syscall_entry *entry, struct u
 		else if (entry->args[i] == ARGV)
 			print_argv(strace->child, arg);
 		else if (entry->args[i] == ENVP)
-			fprintf(stderr, "%#llx /* %d vars */", arg, count_envp(arg));
+			fprintf(stderr, "%#llx /* %d vars */", arg, count_envp(strace->child, arg, is_x64));
 		else if (entry->args[i] == SIGNAL)
 		{
 			if (arg < NSIG)

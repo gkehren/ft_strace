@@ -1,4 +1,4 @@
-FILES:= ft_strace print utils
+FILES:= ft_strace syscall print utils
 NAME:= ft_strace
 
 # ------------------

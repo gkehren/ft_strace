@@ -1,7 +1,5 @@
 #include "../include/ft_strace.h"
 
-const struct syscall_entry syscall_table[] = SYSCALL_TABLE;
-
 void	block_signals(pid_t child)
 {
 	sigset_t	set;
@@ -54,43 +52,19 @@ int	init_trace_child(pid_t child)
 	return (0);
 }
 
-void	handle_x64_syscall(t_strace *strace, struct user_regs_struct *regs)
-{
-	if (!strace->ignore_syscalls || !strcmp(syscall_table[regs->orig_rax].name, "execve"))
-	{
-		if (strace->should_print && !strace->should_print_ret && regs->rax == (unsigned long long)-ENOSYS && regs->orig_rax < strace->syscall_count)
-		{
-			strace->should_print_ret = true;
-			print_syscall(strace, &syscall_table[regs->orig_rax], regs);
-		}
-		else
-		{
-			if (strace->should_print && strace->should_print_ret)
-			{
-				strace->should_print_ret = false;
-				strace->ignore_syscalls = false;
-				if (syscall_table[regs->orig_rax].return_type == INT)
-					fprintf(stderr, " = %lld\n", regs->rax);
-				else
-					fprintf(stderr, " = %#llx\n", regs->rax);
-			}
-			else if (strace->ignore_syscalls && (int)regs->rax < 0)
-				strace->should_print = false;
-		}
-	}
-}
-
-// TODO: for now handle 64-bit syscall later add support for 32-bit syscall
 int	handle_syscall(t_strace *strace)
 {
-	struct user_regs_struct	regs;
-	struct iovec			io;
+	regs_union		regs;
+	struct iovec	io;
 
 	io.iov_base = &regs;
 	io.iov_len = sizeof(regs);
 	if (ptrace(PTRACE_GETREGSET, strace->child, NT_PRSTATUS, &io) < 0)
 		return (1);
-	handle_x64_syscall(strace, &regs);
+	if (io.iov_len == sizeof(struct user_regs_struct))
+		handle_x64_syscall(strace, &regs);
+	else
+		handle_x32_syscall(strace, &regs);
 	return (0);
 }
 
@@ -104,7 +78,6 @@ int	ft_strace(char *prog, char **args, char **env)
 	strace.ignore_syscalls = true;
 	strace.should_print = true;
 	strace.should_print_ret = false;
-	strace.syscall_count = sizeof(syscall_table) / sizeof(syscall_table[0]);
 	strace.child = create_child_process(prog, args, env);
 	if (strace.child < 0)
 		return (1);

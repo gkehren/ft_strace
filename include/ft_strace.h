@@ -22,9 +22,38 @@
 #include <stdbool.h>
 #include <ctype.h>
 
-#include "x64_syscall_entry.h"
+#include "syscall_entry.h"
 
 #define BUFFER_SIZE	1024
+#define SYSCALL_TABLE_SIZE_x64	335
+#define SYSCALL_TABLE_SIZE_x32	403
+
+struct user_regs_struct32
+{
+	uint32_t ebx;
+	uint32_t ecx;
+	uint32_t edx;
+	uint32_t esi;
+	uint32_t edi;
+	uint32_t ebp;
+	uint32_t eax;
+	uint32_t xds;
+	uint32_t xes;
+	uint32_t xfs;
+	uint32_t xgs;
+	uint32_t orig_eax;
+	uint32_t eip;
+	uint32_t xcs;
+	uint32_t eflags;
+	uint32_t esp;
+	uint32_t xss;
+};
+
+typedef union
+{
+	struct user_regs_struct regs64;
+	struct user_regs_struct32 regs32;
+}	regs_union;
 
 typedef struct	s_strace
 {
@@ -32,13 +61,11 @@ typedef struct	s_strace
 	bool				ignore_syscalls;
 	bool				should_print;
 	bool				should_print_ret;
-	unsigned long long	syscall_count;
-} t_strace;
+}	t_strace;
 
-// utils.c
 char	*find_exec(char *prog);
-
-// print.c
-void	print_syscall(t_strace *strace, const struct syscall_entry *entry, struct user_regs_struct *regs);
+void	handle_x64_syscall(t_strace *strace, regs_union *regs);
+void	handle_x32_syscall(t_strace *strace, regs_union *regs);
+void	print_syscall(t_strace *strace, const struct syscall_entry *entry, regs_union *regs, bool is_x64);
 
 #endif
