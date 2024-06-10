@@ -78,6 +78,7 @@ int	ft_strace(char *prog, char **args, char **env)
 	strace.ignore_syscalls = true;
 	strace.should_print = true;
 	strace.should_print_ret = false;
+	strace.is_x64 = true;
 	strace.child = create_child_process(prog, args, env);
 	if (strace.child < 0)
 		return (1);
@@ -106,7 +107,7 @@ int	ft_strace(char *prog, char **args, char **env)
 	}
 
 	if (!strace.ignore_syscalls && strace.should_print && strace.should_print_ret)
-		fprintf(stderr, " = ?\n");
+		fprintf(stderr, ") = ?\n");
 
 	if (WIFSIGNALED(status))
 	{

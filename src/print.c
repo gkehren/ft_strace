@@ -272,5 +272,4 @@ void	print_syscall(t_strace *strace, const struct syscall_entry *entry, regs_uni
 		if (i < entry->arg_count - 1)
 			fprintf(stderr, ", ");
 	}
-	fprintf(stderr, ")");
 }

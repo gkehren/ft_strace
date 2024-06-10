@@ -61,6 +61,7 @@ typedef struct	s_strace
 	bool				ignore_syscalls;
 	bool				should_print;
 	bool				should_print_ret;
+	bool				is_x64;
 }	t_strace;
 
 char	*find_exec(char *prog);
