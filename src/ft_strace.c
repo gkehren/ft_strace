@@ -79,6 +79,7 @@ int	ft_strace(char *prog, char **args, char **env)
 	strace.should_print = true;
 	strace.should_print_ret = false;
 	strace.is_x64 = true;
+	strace.orig_eax = 0;
 	strace.child = create_child_process(prog, args, env);
 	if (strace.child < 0)
 		return (1);

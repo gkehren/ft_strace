@@ -62,6 +62,7 @@ typedef struct	s_strace
 	bool				should_print;
 	bool				should_print_ret;
 	bool				is_x64;
+	uint32_t			orig_eax;
 }	t_strace;
 
 char	*find_exec(char *prog);

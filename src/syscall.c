@@ -42,7 +42,8 @@ void	handle_x32_syscall(t_strace *strace, regs_union *regs)
 	if (strace->should_print && !strace->should_print_ret && regs->regs32.eax == (unsigned int)-ENOSYS && regs->regs32.orig_eax < SYSCALL_TABLE_SIZE_x32)
 	{
 		strace->should_print_ret = true;
-		print_syscall(strace, &syscall_table[regs->regs32.orig_eax], regs, false);
+		strace->orig_eax = regs->regs32.orig_eax;
+		print_syscall(strace, &syscall_table[strace->orig_eax], regs, false);
 	}
 	else
 	{
@@ -51,7 +52,7 @@ void	handle_x32_syscall(t_strace *strace, regs_union *regs)
 			strace->should_print_ret = false;
 			strace->ignore_syscalls = false;
 
-			if (syscall_table[regs->regs32.orig_eax].return_type == INT)
+			if (syscall_table[strace->orig_eax].return_type == INT)
 				fprintf(stderr, ") = %d\n", regs->regs32.eax);
 			else
 				fprintf(stderr, ") = %#lx\n", (unsigned long)regs->regs32.eax);
